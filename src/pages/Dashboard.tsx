@@ -1,5 +1,6 @@
 
 import { FileUpload } from '@/components/FileUpload/FileUpload';
+import { FilesList } from '@/components/FilesList/FilesList';
 import { Header } from '@/components/Layout/Header';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -18,9 +19,14 @@ const Dashboard = () => {
           Welcome back{displayName ? `, ${displayName}` : ''}! Upload a file to generate a sharing link.
         </p>
         
-        <div className="bg-white rounded-lg p-6 shadow-sm">
+        <div className="bg-white rounded-lg p-6 shadow-sm mb-8">
           <h2 className="text-xl font-semibold mb-4">Upload File</h2>
           <FileUpload />
+        </div>
+
+        <div className="mt-8">
+          <h2 className="text-xl font-semibold mb-4">Your Uploaded Files</h2>
+          <FilesList />
         </div>
       </div>
     </div>
