@@ -83,18 +83,56 @@ export const FileUpload = () => {
       // File path in supabase storage: userId/uniqueId/filename
       const filePath = `${user.id}/${uniqueId}/${file.name}`;
       
-      // Upload file to Supabase storage
-      const { error: uploadError, data } = await supabase.storage
-        .from('file_uploads')
-        .upload(filePath, file, {
-          cacheControl: '3600',
-          upsert: false,
-          onUploadProgress: (progress) => {
-            const calculatedProgress = Math.round((progress.loaded / progress.total) * 100);
+      // Set up upload with progress tracking
+      const xhr = new XMLHttpRequest();
+      const uploadPromise = new Promise<{ data: any, error: any }>((resolve, reject) => {
+        // Track upload progress
+        xhr.upload.addEventListener("progress", (event) => {
+          if (event.lengthComputable) {
+            const calculatedProgress = Math.round((event.loaded / event.total) * 100);
             setUploadProgress(calculatedProgress);
-          },
+          }
         });
 
+        // Handle completion
+        xhr.addEventListener("load", async () => {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            // Upload to Supabase storage without onUploadProgress
+            const { data, error } = await supabase.storage
+              .from('file_uploads')
+              .upload(filePath, file, {
+                cacheControl: '3600',
+                upsert: false
+              });
+              
+            resolve({ data, error });
+          } else {
+            reject(new Error(`Upload failed with status ${xhr.status}`));
+          }
+        });
+
+        // Handle errors
+        xhr.addEventListener("error", () => {
+          reject(new Error("Network error occurred during upload"));
+        });
+      });
+
+      // Start tracking a fake progress for better UX
+      const progressInterval = setInterval(() => {
+        setUploadProgress((prev) => {
+          if (prev >= 95) {
+            clearInterval(progressInterval);
+            return prev;
+          }
+          return prev + 5;
+        });
+      }, 500);
+
+      // Perform the upload
+      const { error: uploadError } = await uploadPromise;
+
+      clearInterval(progressInterval);
+      
       if (uploadError) {
         throw uploadError;
       }
