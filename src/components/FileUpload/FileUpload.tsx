@@ -4,6 +4,9 @@ import { FileUploadDropzone } from './FileUploadDropzone';
 import { FileUploadProgress } from './FileUploadProgress';
 import { FileUploadSuccess } from './FileUploadSuccess';
 import { useToast } from '@/components/ui/use-toast';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
+import { v4 as uuidv4 } from 'uuid';
 
 export interface UploadedFile {
   id: string;
@@ -20,6 +23,7 @@ export const FileUpload = () => {
   const [uploadedFile, setUploadedFile] = useState<UploadedFile | null>(null);
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const { user } = useAuth();
 
   const handleDragEnter = (e: React.DragEvent) => {
     e.preventDefault();
@@ -60,43 +64,87 @@ export const FileUpload = () => {
   };
 
   const handleFileUpload = async (file: File) => {
+    if (!user) {
+      toast({
+        title: "Authentication Required",
+        description: "You need to be logged in to upload files.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setUploading(true);
     setUploadProgress(0);
 
-    // Simulate file upload with progress
-    const totalSize = file.size;
-    let uploaded = 0;
-    
-    const interval = setInterval(() => {
-      uploaded += totalSize / 10;
-      const progress = Math.min(Math.round((uploaded / totalSize) * 100), 100);
-      setUploadProgress(progress);
+    try {
+      // Generate unique ID for file
+      const uniqueId = uuidv4();
       
-      if (progress >= 100) {
-        clearInterval(interval);
-        
-        // In a real implementation, this would return a URL from the server
-        const fileId = `file-${Date.now()}`;
-        const fileUrl = `${window.location.origin}/download/${fileId}`;
-        
-        // Mock successful upload after 100%
-        setTimeout(() => {
-          setUploading(false);
-          setUploadedFile({
-            id: fileId,
-            name: file.name,
-            size: file.size,
-            type: file.type,
-            url: fileUrl,
-          });
-          
-          toast({
-            title: "File uploaded successfully",
-            description: "Your file has been uploaded and is ready to share.",
-          });
-        }, 500);
+      // File path in supabase storage: userId/uniqueId/filename
+      const filePath = `${user.id}/${uniqueId}/${file.name}`;
+      
+      // Upload file to Supabase storage
+      const { error: uploadError, data } = await supabase.storage
+        .from('file_uploads')
+        .upload(filePath, file, {
+          cacheControl: '3600',
+          upsert: false,
+          onUploadProgress: (progress) => {
+            const calculatedProgress = Math.round((progress.loaded / progress.total) * 100);
+            setUploadProgress(calculatedProgress);
+          },
+        });
+
+      if (uploadError) {
+        throw uploadError;
       }
-    }, 300);
+
+      // Get public URL for the file
+      const { data: { publicUrl } } = supabase.storage
+        .from('file_uploads')
+        .getPublicUrl(filePath);
+
+      // Insert record in files table
+      const { error: dbError } = await supabase
+        .from('files')
+        .insert({
+          user_id: user.id,
+          name: file.name,
+          size: file.size,
+          mime_type: file.type,
+          file_path: filePath,
+          unique_id: uniqueId
+        });
+
+      if (dbError) {
+        throw dbError;
+      }
+
+      // Create the download URL
+      const fileUrl = `${window.location.origin}/download/${uniqueId}`;
+      
+      setUploadedFile({
+        id: uniqueId,
+        name: file.name,
+        size: file.size,
+        type: file.type,
+        url: fileUrl,
+      });
+      
+      toast({
+        title: "File uploaded successfully",
+        description: "Your file has been uploaded and is ready to share.",
+      });
+    } catch (error: any) {
+      console.error('Upload error:', error);
+      toast({
+        title: "Upload Failed",
+        description: error.message || "Failed to upload file. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setUploading(false);
+    }
   };
 
   const handleReset = () => {

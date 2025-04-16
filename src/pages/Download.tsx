@@ -6,12 +6,14 @@ import { Button } from '@/components/ui/button';
 import { Header } from '@/components/Layout/Header';
 import { Spinner } from '@/components/Spinner';
 import { useToast } from '@/components/ui/use-toast';
+import { supabase } from '@/integrations/supabase/client';
 
 interface FileDetails {
   id: string;
   name: string;
   size: number;
   type: string;
+  path: string;
 }
 
 const Download = () => {
@@ -22,29 +24,43 @@ const Download = () => {
   const { toast } = useToast();
 
   useEffect(() => {
-    // Simulate API call to fetch file details
     const fetchFileDetails = async () => {
+      if (!fileId) {
+        setError("File not found");
+        setLoading(false);
+        return;
+      }
+
       setLoading(true);
       try {
-        // Simulate API delay
-        await new Promise(resolve => setTimeout(resolve, 800));
-        
-        // In a real app, this would be fetched from the backend
-        if (fileId) {
-          // Mock file data for demonstration
-          const mockFile = {
-            id: fileId,
-            name: "example-document.pdf",
-            size: 2500000, // 2.5 MB
-            type: "application/pdf",
-          };
-          
-          setFile(mockFile);
-        } else {
-          setError("File not found");
+        // Get file information from database
+        const { data: fileData, error: fileError } = await supabase
+          .from('files')
+          .select('*')
+          .eq('unique_id', fileId)
+          .single();
+
+        if (fileError || !fileData) {
+          throw new Error("File not found");
         }
-      } catch (err) {
-        setError("Failed to load file information");
+
+        setFile({
+          id: fileData.unique_id,
+          name: fileData.name,
+          size: fileData.size,
+          type: fileData.mime_type,
+          path: fileData.file_path
+        });
+
+        // Update download count
+        await supabase
+          .from('files')
+          .update({ download_count: fileData.download_count + 1 })
+          .eq('id', fileData.id);
+
+      } catch (err: any) {
+        console.error('Error fetching file:', err);
+        setError(err.message || "Failed to load file information");
         toast({
           title: "Error",
           description: "Could not load file information",
@@ -58,21 +74,46 @@ const Download = () => {
     fetchFileDetails();
   }, [fileId, toast]);
 
-  const handleDownload = () => {
-    // In a real app, this would trigger the actual file download
-    // For this demo, show a success toast
-    toast({
-      title: "Download started",
-      description: "Your file download has begun.",
-    });
+  const handleDownload = async () => {
+    if (!file) return;
     
-    // Simulate download by creating a fake download
-    const link = document.createElement('a');
-    link.href = `#${fileId}`;
-    link.download = file?.name || 'download';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    try {
+      toast({
+        title: "Download started",
+        description: "Your file download has begun.",
+      });
+
+      // Get signed URL for file download
+      const { data, error } = await supabase.storage
+        .from('file_uploads')
+        .download(file.path);
+      
+      if (error || !data) {
+        throw error;
+      }
+
+      // Create download URL
+      const downloadUrl = URL.createObjectURL(data);
+      
+      // Create a temporary link to trigger download
+      const link = document.createElement('a');
+      link.href = downloadUrl;
+      link.download = file.name;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      
+      // Clean up the object URL
+      setTimeout(() => URL.revokeObjectURL(downloadUrl), 100);
+      
+    } catch (error: any) {
+      console.error('Download error:', error);
+      toast({
+        title: "Download Failed",
+        description: error.message || "Failed to download file. Please try again.",
+        variant: "destructive",
+      });
+    }
   };
 
   // Format file size
