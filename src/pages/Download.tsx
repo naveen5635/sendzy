@@ -33,6 +33,8 @@ const Download = () => {
 
       setLoading(true);
       try {
+        console.log("Fetching file with ID:", fileId);
+        
         // Get file information from database
         const { data: fileData, error: fileError } = await supabase
           .from('files')
@@ -41,8 +43,11 @@ const Download = () => {
           .single();
 
         if (fileError || !fileData) {
+          console.error("File not found:", fileError);
           throw new Error("File not found");
         }
+        
+        console.log("File data:", fileData);
 
         setFile({
           id: fileData.unique_id,

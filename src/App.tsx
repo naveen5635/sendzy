@@ -27,7 +27,7 @@ const App = () => (
             <Route path="/login" element={<Login />} />
             <Route path="/signup" element={<Signup />} />
             <Route path="/download/:fileId" element={<Download />} />
-            <Route path="/d/:fileId" element={<Download />} /> {/* Add shorter URL format */}
+            <Route path="/d/:fileId" element={<Download />} /> {/* Short URL format */}
             
             {/* Protected Routes */}
             <Route element={<PrivateRoute />}>
