@@ -1,3 +1,4 @@
+
 import { useState, useRef } from 'react';
 import { FileUploadDropzone } from './FileUploadDropzone';
 import { FileUploadProgress } from './FileUploadProgress';
@@ -14,6 +15,12 @@ export interface UploadedFile {
   type: string;
   url: string;
 }
+
+// Generate a short unique ID (8 characters)
+const generateShortId = () => {
+  // Get the first 8 characters of a UUID v4 without hyphens
+  return uuidv4().replace(/-/g, '').substring(0, 8);
+};
 
 export const FileUpload = () => {
   const [isDragging, setIsDragging] = useState(false);
@@ -76,8 +83,8 @@ export const FileUpload = () => {
     setUploadProgress(0);
 
     try {
-      // Generate unique ID for file
-      const uniqueId = uuidv4();
+      // Generate short unique ID for file (8 characters)
+      const uniqueId = generateShortId();
       
       // File path in supabase storage: userId/uniqueId/filename
       const filePath = `${user.id}/${uniqueId}/${file.name}`;
@@ -115,8 +122,8 @@ export const FileUpload = () => {
         throw dbError;
       }
 
-      // Create the download URL
-      const fileUrl = `${window.location.origin}/download/${uniqueId}`;
+      // Create the shorter download URL
+      const fileUrl = `${window.location.origin}/d/${uniqueId}`;
       
       setUploadedFile({
         id: uniqueId,
