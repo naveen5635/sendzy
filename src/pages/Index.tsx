@@ -95,7 +95,7 @@ const Index = () => {
       {/* Footer */}
       <footer className="bg-gray-50 py-8 px-4 border-t">
         <div className="container mx-auto text-center text-gray-600 text-sm">
-          <p>© 2025 FileShare. All rights reserved.</p>
+          <p>© 2025 Sendzy. All rights reserved.</p>
         </div>
       </footer>
     </div>
