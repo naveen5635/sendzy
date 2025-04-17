@@ -12,7 +12,7 @@ export const Header = () => {
       <div className="container mx-auto px-4 py-4 flex items-center justify-between">
         <Link to="/" className="flex items-center">
           <Upload className="h-6 w-6 text-brand-purple mr-2" />
-          <span className="font-bold text-xl">FileShare</span>
+          <span className="font-bold text-xl">Sendzy</span>
         </Link>
         
         <nav className="flex items-center gap-4">
