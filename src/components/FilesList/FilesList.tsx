@@ -24,6 +24,7 @@ interface FileItem {
   created_at: string;
   download_count: number;
   unique_id: string;
+  file_path: string; // Added file_path to the interface
 }
 
 export const FilesList = () => {
@@ -33,36 +34,36 @@ export const FilesList = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const fetchFiles = async () => {
+    if (!user) return;
+
+    try {
+      setLoading(true);
+      
+      // Get user's uploaded files
+      const { data, error } = await supabase
+        .from('files')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      
+      setFiles(data || []);
+    } catch (err: any) {
+      console.error('Error fetching files:', err);
+      setError(err.message || 'Failed to load files');
+      toast({
+        title: "Error",
+        description: "Failed to load your files",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    const fetchFiles = async () => {
-      if (!user) return;
-
-      try {
-        setLoading(true);
-        
-        // Get user's uploaded files
-        const { data, error } = await supabase
-          .from('files')
-          .select('*')
-          .eq('user_id', user.id)
-          .order('created_at', { ascending: false });
-
-        if (error) throw error;
-        
-        setFiles(data || []);
-      } catch (err: any) {
-        console.error('Error fetching files:', err);
-        setError(err.message || 'Failed to load files');
-        toast({
-          title: "Error",
-          description: "Failed to load your files",
-          variant: "destructive",
-        });
-      } finally {
-        setLoading(false);
-      }
-    };
-
     fetchFiles();
   }, [user, toast]);
 
@@ -75,35 +76,39 @@ export const FilesList = () => {
     });
   };
 
-  const handleDelete = async (id: string) => {
+  const handleDelete = async (id: string, filePath: string) => {
     if (!user) return;
 
     try {
-      // Get file details first to delete from storage
-      const { data: fileData, error: fetchError } = await supabase
-        .from('files')
-        .select('file_path')
-        .eq('id', id)
-        .single();
+      console.log("Deleting file with id:", id);
+      console.log("File path to delete:", filePath);
+      
+      // First delete from storage if we have the path
+      if (filePath) {
+        console.log("Attempting to delete from storage:", filePath);
+        const { error: storageError } = await supabase.storage
+          .from('file_uploads')
+          .remove([filePath]);
 
-      if (fetchError) throw fetchError;
+        if (storageError) {
+          console.error('Storage deletion error:', storageError);
+          throw storageError;
+        }
+        console.log("Successfully deleted from storage");
+      }
 
-      // Delete from database
+      // Then delete from database
+      console.log("Attempting to delete from database");
       const { error: deleteError } = await supabase
         .from('files')
         .delete()
         .eq('id', id);
 
-      if (deleteError) throw deleteError;
-
-      // Delete from storage if we have the path
-      if (fileData?.file_path) {
-        const { error: storageError } = await supabase.storage
-          .from('file_uploads')
-          .remove([fileData.file_path]);
-
-        if (storageError) console.error('Storage deletion error:', storageError);
+      if (deleteError) {
+        console.error('Database deletion error:', deleteError);
+        throw deleteError;
       }
+      console.log("Successfully deleted from database");
 
       // Update UI
       setFiles(files.filter(file => file.id !== id));
@@ -199,7 +204,7 @@ export const FilesList = () => {
                       <Eye className="h-4 w-4" />
                       <span className="sr-only">View file</span>
                     </Button>
-                    <Button variant="ghost" size="sm" onClick={() => handleDelete(file.id)}>
+                    <Button variant="ghost" size="sm" onClick={() => handleDelete(file.id, file.file_path)}>
                       <Trash2 className="h-4 w-4 text-red-500" />
                       <span className="sr-only">Delete file</span>
                     </Button>
